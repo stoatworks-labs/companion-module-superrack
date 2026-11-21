@@ -5,7 +5,8 @@
 import { parseRackField } from "./racks.js";
 
 /**
- * The rack dropdown: SuperRack's racks when ProLink has listed them, and any
+ * The rack dropdown: SuperRack's racks when ProLink or Remora's state feed has
+ * listed them, and any
  * name or number typed in. A number (from 1) is the rack's place in SuperRack's
  * list; a name matches loosely ("head1" finds "head 1"). That is the same rule
  * Remora's /remora/rack/select follows, so a button means the same rack either
@@ -110,7 +111,7 @@ export default function UpdateActions(self) {
     ),
     refresh: plain(
       "Refresh the rack list",
-      "Directly: asks SuperRack for its racks again (it also sends them when they change). Through Remora: Resync.",
+      "Directly: asks SuperRack for its racks again (it also sends them when they change). Through Remora: Resync, and asks for Remora's state again.",
       () => b()?.resync(),
     ),
     follow: {

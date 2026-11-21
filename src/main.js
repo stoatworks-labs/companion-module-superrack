@@ -65,7 +65,7 @@ export default class ModuleInstance extends InstanceBase {
         width: 12,
         label: "Two ways to reach SuperRack",
         value:
-          "<b>Direct (ProLink)</b>: SuperRack connects to this module as it would to a LAWO mc² desk, lists its racks and answers every command. In SuperRack: Setup › Controllers › + › <b>ProLink LAWO Console Remote</b>, console IP = this Companion machine, port below, then Assign. Its PORT has to be a wired Ethernet adapter.<br><b>Through Remora</b>: commands go to Remora's OSC, and Remora drives SuperRack over MIDI or ProLink and keeps it following the desk. Remora sends nothing back, so this mode has no rack list and no feedback.",
+          "<b>Direct (ProLink)</b>: SuperRack connects to this module as it would to a LAWO mc² desk, lists its racks and answers every command. In SuperRack: Setup › Controllers › + › <b>ProLink LAWO Console Remote</b>, console IP = this Companion machine, port below, then Assign. Its PORT has to be a wired Ethernet adapter.<br><b>Through Remora</b>: commands go to Remora's OSC, and Remora drives SuperRack over MIDI or ProLink and keeps it following the desk. With Remora's state target pointed here, it also says which racks there are, the rack it's on and how it knows, and whether it's following.",
       },
       {
         type: "dropdown",
@@ -130,12 +130,25 @@ export default class ModuleInstance extends InstanceBase {
         isVisibleExpression: "$(options:mode) == 'remora'",
       },
       {
+        type: "number",
+        id: "remorastateport",
+        label: "Port for Remora's state (0 = off)",
+        tooltip:
+          "UDP port on this machine that Remora's state comes to. In Remora: Settings › Companion › Remora's state, with this machine's address and this port.",
+        width: 6,
+        min: 0,
+        max: 65535,
+        asInteger: true,
+        default: 9021,
+        isVisibleExpression: "$(options:mode) == 'remora'",
+      },
+      {
         type: "static-text",
         id: "remorainfo",
         width: 12,
         label: "",
         value:
-          "Remora listens for OSC on UDP 9020 unless it's been changed in its settings. Send CC and Follow work only this way; Show the rack for a channel works only Direct.",
+          "Remora listens for OSC on UDP 9020 unless it's been changed in its settings. For feedback, set Remora's state target (Settings › Companion › Remora's state) to this machine (127.0.0.1 on the same Mac) and the port above; it's off until you do. Send CC and Follow work only this way; Show the rack for a channel works only Direct.",
         isVisibleExpression: "$(options:mode) == 'remora'",
       },
 
@@ -154,9 +167,7 @@ export default class ModuleInstance extends InstanceBase {
         this.updateStatus(InstanceStatus.Ok, describeLink(link));
         break;
       case "remora":
-        // Ok, though nothing is known about Remora: its OSC is one-way, so the
-        // most this can say is where commands go.
-        this.updateStatus(InstanceStatus.Ok, `${describeLink(link)} (one-way)`);
+        this.#remoraStatus(link);
         break;
       case "failed":
         this.updateStatus(
@@ -175,6 +186,37 @@ export default class ModuleInstance extends InstanceBase {
     this.checkFeedbacks("connected", "rackShown");
   }
 
+  #remoraStatus(link) {
+    const text = describeLink(link);
+    switch (link.feed) {
+      case "live":
+        // Remora is there. Whether it can reach SuperRack is its own report.
+        if (link.problem || link.hostLink?.state === "failed")
+          this.updateStatus(InstanceStatus.UnknownWarning, text);
+        else this.updateStatus(InstanceStatus.Ok, text);
+        break;
+      case "waiting":
+        this.updateStatus(InstanceStatus.Connecting, text);
+        break;
+      case "silent":
+        this.updateStatus(
+          InstanceStatus.UnknownWarning,
+          `${text}. Commands still go. For feedback, set Remora's state target (Settings › Companion › Remora's state) to this machine, port ${link.statePort}.`,
+        );
+        break;
+      case "failed":
+        this.updateStatus(
+          InstanceStatus.ConnectionFailure,
+          `${text}. Commands still go; pick another port for Remora's state, here and in Remora.`,
+        );
+        break;
+      default:
+        // No state port: nothing is known about Remora, so the most this can
+        // say is where commands go.
+        this.updateStatus(InstanceStatus.Ok, `${text} (one-way)`);
+    }
+  }
+
   onRacks(racks) {
     this.state.racks = racks;
     this.#definitionsForRacks();
@@ -182,10 +224,18 @@ export default class ModuleInstance extends InstanceBase {
     this.checkFeedbacks("rackShown");
   }
 
-  onPosition(index) {
+  onPosition(index, how = null, name = "") {
     this.state.position = index;
+    this.state.positionHow = index === null ? null : how;
+    this.state.positionName = index === null ? "" : name;
     this.refreshVariableValues();
     this.checkFeedbacks("rackShown");
+  }
+
+  onFollow(value) {
+    this.state.follow = value;
+    this.refreshVariableValues();
+    this.checkFeedbacks("following");
   }
 
   onResult(error, text) {

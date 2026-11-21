@@ -19,13 +19,16 @@ Companion 5.1 or later.
 ```
 Direct:          Companion ──▶ this module (TCP 50002, plays a LAWO mc²) ◀── SuperRack dials in
 Through Remora:  Companion ──▶ this module ──UDP OSC 9020──▶ Remora ──MIDI or ProLink──▶ SuperRack
+                                this module ◀──UDP OSC 9021── Remora's state feed (when set up)
 ```
 
 - **Direct** (`ProLinkBackend` in `src/backends.js`) is the console end of ProLink, the link a
   LAWO mc² uses with SuperRack's "ProLink LAWO Console Remote" controller. **SuperRack dials the
   console**, so the module listens. Two-way: SuperRack lists its racks and answers every command.
-- **Through Remora** (`RemoraBackend`) sends Remora's `/remora/...` OSC. One-way: Remora answers
-  nothing, so this mode has no rack list and no feedback.
+- **Through Remora** (`RemoraBackend`) sends Remora's `/remora/...` OSC. Remora answers nothing to a
+  command, but its **state feed** (off in Remora until its state target is set) sends the host,
+  its link and any problem, the rack names, the rack it's on and how it knows, and Follow, to the
+  module's UDP port (9021; 0 turns the listener off).
 
 Every action is defined in both modes, so a page survives switching. Actions only one mode can do
 say so in their name and log a warning when pressed in the other.
@@ -46,8 +49,9 @@ SuperRack Performer 15.15.12.13 did on 2026-11-07. **That knowledge comes only f
 scripts in LAWO's mc² firmware and from runs against a licensed SuperRack.** Don't add anything
 learned any other way.
 
-Remora's OSC addresses are owned by Remora (README "Companion", `Bridge.swift`). Change one there
-and Through Remora breaks silently.
+Remora's OSC addresses are owned by Remora: commands in its README "Companion" and `Bridge.swift`,
+the state feed in its README "Remora's state, for feedback" and `Sources/RemoraEngine/StateFeed.swift`.
+Change one there and Through Remora breaks silently.
 
 ## 4. Rules that are not up for debate
 
@@ -55,9 +59,15 @@ and Through Remora breaks silently.
   ShowRack, NavigateRack, NavigatePlugin, SetViewMode. Those are the commands an mc² sends and
   Remora was checked with. Don't add others, and don't go looking for more.
 - **One command in flight**, each answered within 1 s or counted as unanswered, as Remora does.
-- **The position is only ever what this module's own commands imply.** SuperRack never says which
-  rack it's on. A step from a known rack moves it; an edge, a refusal or no answer makes it
-  unknown (`null`), and the _Rack is shown_ feedback goes dark. Don't infer more.
+- **The position is only ever what the commands imply, and says how it's known.** SuperRack never
+  says which rack it's on. Direct: an answered ShowRack is `reported`; a Next/Previous Rack from a
+  known rack is `counted` (SuperRack says it worked, not where it landed); an edge, a refusal or
+  no answer makes it unknown (`null`). Through Remora: Remora's `how` as sent (`reported`, `seen`,
+  `counted`, `sent`). _Rack is shown_ lights only for `reported`/`seen` unless asked to. Don't
+  infer more.
+- **Silence from Remora means unknown.** Remora sends only changes, so the module asks
+  (`/remora/state/query`) at start and every 5 s; 12 s with nothing makes the rack and Follow
+  unknown and the status a warning. Never keep showing a rack Remora has stopped vouching for.
 
 ## 5. Layout
 
@@ -89,7 +99,14 @@ and Through Remora breaks silently.
   `setPresetDefinitions(structure, defs)` with `type: "simple"` and only presets the structure
   names; config visibility is `isVisibleExpression`; never a bare `checkFeedbacks()`. Preset text
   wants real newlines, not `\n`.
-- **Rack presets are by number**, labelled `$(label:rack_N_name)`, so a rename relabels them.
+- **Rack presets are by number**, labelled `$(label:rack_N_name)`, so a rename relabels them. Each
+  carries _Rack is shown_ twice: `basis: any` amber, then `basis: confirmed` green (later wins).
+- **Remora's state goes to the target in Remora's settings, not back to the asker.** A query from
+  the module's socket is answered to whatever Remora is set to, so a missing target looks exactly
+  like a missing Remora: the status text says how to set it.
+- **Remora sends everything only when it starts.** A module that starts after Remora hears only
+  changes until it asks, so the query at start is load-bearing; a check fails if it's later than
+  the first re-query.
 - **The tests run the real module outside Companion**: a context object with
   `_isInstanceContext: true` and stubbed setters, and `globalThis.COMPANION_LOGGER` to catch logs.
   `npm test` is the whole suite; a check was confirmed to go red by breaking the code on purpose.

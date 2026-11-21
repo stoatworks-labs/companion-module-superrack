@@ -362,7 +362,8 @@ await check("one preset per rack, labelled by its name variable", () => {
 
 console.log("\n== Direct: where each action leaves SuperRack ==");
 const fire = (id, options = {}) => ctx.actions[id].callback({ options });
-const shown = (rack) => ctx.feedbacks.rackShown.callback({ options: { rack } });
+const shown = (rack, basis = "confirmed") =>
+  ctx.feedbacks.rackShown.callback({ options: { rack, basis } });
 const settle = async () => {
   await until(
     () =>
@@ -384,6 +385,7 @@ await check("Show a rack by name: ShowRack on its first channel", async () => {
   assert.equal(sr.screen.rack, 2);
   assert.equal(ctx.values.rack_name, "Vox");
   assert.equal(ctx.values.rack_number, 3);
+  assert.equal(ctx.values.rack_how, "reported");
   assert.equal(shown("Vox"), true);
   assert.equal(shown("3"), true, "by number too");
   assert.equal(shown("Kick"), false);
@@ -409,7 +411,11 @@ await check(
     );
     assert.equal(sr.screen.rack, 5, "the fake's screen");
     assert.equal(ctx.values.rack_number, 6, "the module's idea of it");
-    assert.equal(shown("6"), true);
+    // The last step was a Next/Previous Rack: SuperRack said it succeeded,
+    // not where it landed, so the rack is counted, as Remora calls it.
+    assert.equal(ctx.values.rack_how, "counted");
+    assert.equal(shown("6"), false, "not confirmed");
+    assert.equal(shown("6", "any"), true, "counted");
   },
 );
 await check(
@@ -432,6 +438,7 @@ await check(
     );
     assert.equal(sr.screen.rack, 4);
     assert.equal(ctx.values.rack_number, 5);
+    assert.equal(ctx.values.rack_how, "counted");
   },
 );
 await check(
@@ -725,6 +732,7 @@ await mod.configUpdated({
   mode: "remora",
   remorahost: "127.0.0.1",
   remoraport: REMORA_PORT,
+  remorastateport: 0,
 });
 
 await check("switching mode frees the ProLink port", async () => {
@@ -843,6 +851,243 @@ await check("feedbacks stay dark: Remora answers nothing", () => {
   );
 });
 
+// --- Remora's state feed ------------------------------------------------------
+console.log("\n== Through Remora: Remora's state ==");
+const STATE_PORT = 55121;
+const remoraState = {
+  answering: true,
+  host: ["superrack.prolink", "SuperRack"],
+  link: ["connected", "connected to SuperRack Performer at 127.0.0.1:50002"],
+  problem: "",
+  names: ["Kick", "Snare", "Vox", "FX"],
+  rack: [0, "", "unknown"],
+  follow: 0,
+};
+const str = (value) => ({ type: "s", value });
+const int = (value) => ({ type: "i", value });
+const pushState = (address, args) =>
+  remora.send(wire.encodeOSC({ address, args }), STATE_PORT, "127.0.0.1");
+const sendAllState = () => {
+  const st = remoraState;
+  pushState("/remora/state/host", st.host.map(str));
+  pushState("/remora/state/host/link", st.link.map(str));
+  pushState("/remora/state/host/problem", [str(st.problem)]);
+  pushState("/remora/state/racks/count", [int(st.names.length)]);
+  pushState("/remora/state/racks/names", st.names.map(str));
+  pushState("/remora/state/rack", [
+    int(st.rack[0]),
+    str(st.rack[1]),
+    str(st.rack[2]),
+  ]);
+  pushState("/remora/state/follow", [int(st.follow)]);
+};
+// Remora sends its state to its configured target, not back to the asker.
+remora.on("message", (b) => {
+  const m = wire.decodeOSC(b);
+  if (m?.address === "/remora/state/query" && remoraState.answering)
+    sendAllState();
+});
+const queries = () =>
+  heard.filter((m) => m.address === "/remora/state/query").length;
+const commandsHeard = () =>
+  heard
+    .filter((m) => m.address !== "/remora/state/query")
+    .map((m) => m.address);
+
+mod.remoraTiming = { queryMs: 150, staleMs: 600 };
+heard.length = 0;
+await mod.configUpdated({
+  ...config,
+  mode: "remora",
+  remorahost: "127.0.0.1",
+  remoraport: REMORA_PORT,
+  remorastateport: STATE_PORT,
+});
+
+await check("it asks for Remora's state as soon as it starts", async () => {
+  // Within 100 ms, sooner than the first re-query: Remora sends everything
+  // when it starts, so a module that starts later has to ask.
+  await until(() => queries() >= 1, 100, "a /remora/state/query");
+});
+await check(
+  "Remora's state arrives: status Ok with Remora's link, racks listed",
+  async () => {
+    await until(() => ctx.values.rack_count === 4, 2000, "the rack names");
+    await until(() => lastStatus(ctx).status === "ok", 1000, "status ok");
+    assert.match(
+      lastStatus(ctx).message,
+      new RegExp(`Remora at 127.0.0.1:${REMORA_PORT}: connected to SuperRack`),
+    );
+    assert.equal(ctx.values.superrack, "SuperRack");
+    assert.equal(ctx.values.rack_4_name, "FX");
+    assert.ok(
+      ctx.actions.showRack.options[0].choices.some((c) => c.id === "Vox"),
+    );
+    assert.equal(ctx.presets.rack_4.style.text, "$(sr:rack_4_name)");
+    assert.equal(ctx.feedbacks.connected.callback({ options: {} }), true);
+  },
+);
+await check(
+  "the rack and how it's known: confirmed lights, counted only on 'any'",
+  async () => {
+    remoraState.rack = [3, "Vox", "reported"];
+    pushState("/remora/state/rack", [int(3), str("Vox"), str("reported")]);
+    await until(() => ctx.values.rack_number === 3, 1000, "rack 3");
+    assert.equal(ctx.values.rack_name, "Vox");
+    assert.equal(ctx.values.rack_how, "reported");
+    assert.equal(shown("Vox"), true);
+    remoraState.rack = [4, "FX", "counted"];
+    pushState("/remora/state/rack", [int(4), str("FX"), str("counted")]);
+    await until(() => ctx.values.rack_number === 4, 1000, "rack 4");
+    assert.equal(ctx.values.rack_how, "counted");
+    assert.equal(shown("4"), false, "counted is not confirmed");
+    assert.equal(shown("4", "any"), true);
+    assert.equal(shown("Vox", "any"), false);
+  },
+);
+await check("Follow: the feedback and variable follow Remora", async () => {
+  remoraState.follow = 1;
+  pushState("/remora/state/follow", [int(1)]);
+  await until(() => ctx.values.follow === "on", 1000, "follow on");
+  assert.equal(ctx.feedbacks.following.callback({ options: {} }), true);
+  remoraState.follow = 0;
+  pushState("/remora/state/follow", [int(0)]);
+  await until(() => ctx.values.follow === "off", 1000, "follow off");
+  assert.equal(ctx.feedbacks.following.callback({ options: {} }), false);
+});
+await check(
+  "a rename in Remora relabels the rack's variable and dropdown",
+  async () => {
+    remoraState.names = ["Kick", "Snare top", "Vox", "FX"];
+    pushState("/remora/state/racks/names", remoraState.names.map(str));
+    await until(
+      () => ctx.values.rack_2_name === "Snare top",
+      1000,
+      "the rename",
+    );
+    assert.ok(
+      ctx.actions.showRack.options[0].choices.some((c) => c.id === "Snare top"),
+    );
+  },
+);
+await check(
+  "Remora reports a problem: warning status, not reachable",
+  async () => {
+    const why = "not connected (Remora is waiting on TCP 50002)";
+    remoraState.problem = why;
+    pushState("/remora/state/host/problem", [str(why)]);
+    await until(
+      () => lastStatus(ctx).status === "unknown_warning",
+      1000,
+      "a warning",
+    );
+    assert.match(lastStatus(ctx).message, /waiting on TCP 50002/);
+    assert.equal(ctx.values.problem, why);
+    assert.equal(ctx.feedbacks.connected.callback({ options: {} }), false);
+    remoraState.problem = "";
+    pushState("/remora/state/host/problem", [str("")]);
+    await until(() => lastStatus(ctx).status === "ok", 1000, "ok again");
+  },
+);
+await check(
+  "commands still go to Remora's OSC port with the feed on",
+  async () => {
+    heard.length = 0;
+    await fire("nextRack");
+    await fire("showRack", { rack: "Snare top" });
+    await sleep(80);
+    assert.deepEqual(commandsHeard(), [
+      "/remora/rack/next",
+      "/remora/rack/select",
+    ]);
+  },
+);
+await check(
+  "Remora goes quiet: a warning, the rack and Follow unknown, names kept",
+  async () => {
+    remoraState.answering = false;
+    await until(
+      () => /no state from it on UDP/.test(lastStatus(ctx).message ?? ""),
+      2000,
+      "the silence to show",
+    );
+    assert.equal(lastStatus(ctx).status, "unknown_warning");
+    assert.match(lastStatus(ctx).message, /Remora's state target/);
+    assert.equal(ctx.values.rack_number, "");
+    assert.equal(ctx.values.follow, "");
+    assert.equal(shown("4", "any"), false);
+    assert.equal(ctx.values.rack_count, 4, "the names stay for the dropdowns");
+    assert.equal(ctx.feedbacks.connected.callback({ options: {} }), false);
+  },
+);
+await check("Remora comes back: live again on the next answer", async () => {
+  remoraState.answering = true;
+  await until(() => lastStatus(ctx).status === "ok", 2000, "ok again");
+  await until(() => ctx.values.rack_number === 4, 1000, "the rack again");
+  assert.equal(ctx.values.follow, "off");
+});
+await check("Refresh: Resync, and a query for Remora's state", async () => {
+  heard.length = 0;
+  await fire("refresh");
+  await sleep(40);
+  assert.ok(commandsHeard().includes("/remora/rack/resync"));
+  assert.ok(queries() >= 1);
+});
+await check(
+  "the state port taken: a failure status, and commands still go",
+  async () => {
+    const squatter = dgram.createSocket("udp4");
+    await new Promise((r) => squatter.bind(STATE_PORT + 1, r));
+    await mod.configUpdated({
+      ...config,
+      mode: "remora",
+      remorahost: "127.0.0.1",
+      remoraport: REMORA_PORT,
+      remorastateport: STATE_PORT + 1,
+    });
+    assert.equal(lastStatus(ctx).status, "connection_failure");
+    assert.match(
+      lastStatus(ctx).message,
+      new RegExp(`UDP ${STATE_PORT + 1} is already in use`),
+    );
+    heard.length = 0;
+    await fire("overview");
+    await sleep(60);
+    assert.deepEqual(commandsHeard(), ["/remora/overview"]);
+    squatter.close();
+  },
+);
+await check(
+  "a Remora that never sends state: Connecting, then the setup hint",
+  async () => {
+    remoraState.answering = false;
+    ctx.statuses.length = 0;
+    await mod.configUpdated({
+      ...config,
+      mode: "remora",
+      remorahost: "127.0.0.1",
+      remoraport: REMORA_PORT,
+      remorastateport: STATE_PORT,
+    });
+    assert.equal(lastStatus(ctx).status, "connecting");
+    await until(
+      () => lastStatus(ctx).status === "unknown_warning",
+      2000,
+      "the warning",
+    );
+    assert.match(
+      lastStatus(ctx).message,
+      new RegExp(`Settings › Companion › Remora's state.*port ${STATE_PORT}`),
+    );
+    remoraState.answering = true;
+    await until(
+      () => lastStatus(ctx).status === "ok",
+      2000,
+      "ok once it answers",
+    );
+  },
+);
+
 await check("destroy() settles", async () => {
   const r = await Promise.race([
     mod.destroy().then(() => "done"),
@@ -918,7 +1163,7 @@ await check("the config's fields: mode, ports as numbers, no regex", () => {
     byId.mode.choices.map((c) => c.id),
     ["prolink", "remora"],
   );
-  for (const id of ["prolinkport", "remoraport"]) {
+  for (const id of ["prolinkport", "remoraport", "remorastateport"]) {
     assert.equal(byId[id].type, "number", id);
     assert.ok(Number.isInteger(byId[id].default), id);
   }

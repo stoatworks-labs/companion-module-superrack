@@ -4,8 +4,9 @@
 // The per-rack presets show a rack by its NUMBER and label it with that rack's
 // name variable, so the button always says what it will do: rename a rack in
 // SuperRack and the label follows; reorder the racks and both follow the new
-// rack in that place. Until ProLink has listed racks (and always Through
-// Remora, which lists none), a bank of racks 1–8 by number stands in.
+// rack in that place. Until racks are listed (by SuperRack over ProLink, or by
+// Remora's state feed), a bank of racks 1–8 by number stands in. A rack button
+// is amber while SuperRack is there only by count, green once confirmed.
 //
 // base 2.x takes presets as (structure, definitions), each definition
 // `type: 'simple'`. A 1.x `category` field loads but the presets never appear.
@@ -86,7 +87,7 @@ export default function UpdatePresets(self) {
   });
 
   // --- Racks ----------------------------------------------------------------
-  const listed = direct ? self.state.racks : [];
+  const listed = self.state.racks;
   const numbers =
     listed.length > 0
       ? listed.map((r) => r.index + 1)
@@ -103,30 +104,43 @@ export default function UpdatePresets(self) {
       text: listed.length > 0 ? `$(${L}:rack_${n}_name)` : `RACK\n${n}`,
       size: listed.length > 0 ? "auto" : "18",
       actions: [act("showRack", { rack: String(n) })],
-      feedbacks: direct
-        ? [
-            {
-              feedbackId: "rackShown",
-              options: { rack: String(n) },
-              style: { bgcolor: GREEN, color: WHITE },
-            },
-          ]
-        : [],
+      // Later feedbacks win: amber for a rack only counted or sent to, green
+      // once SuperRack (or Remora's reading of its window) confirms it.
+      feedbacks: [
+        {
+          feedbackId: "rackShown",
+          options: { rack: String(n), basis: "any" },
+          style: { bgcolor: AMBER, color: WHITE },
+        },
+        {
+          feedbackId: "rackShown",
+          options: { rack: String(n), basis: "confirmed" },
+          style: { bgcolor: GREEN, color: WHITE },
+        },
+      ],
     });
   }
 
   // --- Remora ---------------------------------------------------------------
+  const followingFb = [
+    {
+      feedbackId: "following",
+      options: {},
+      style: { bgcolor: GREEN, color: WHITE },
+    },
+  ];
   presets.follow_toggle = preset({
-    name: "Follow the desk: toggle",
+    name: "Follow the desk: toggle (green while following)",
     text: "FOLLOW",
-    size: "18",
-    bgcolor: AMBER,
+    size: "14",
     actions: [act("follow", { mode: "toggle" })],
+    feedbacks: followingFb,
   });
   presets.follow_on = preset({
     name: "Follow the desk: on",
     text: "FOLLOW\nON",
     actions: [act("follow", { mode: "on" })],
+    feedbacks: followingFb,
   });
   presets.follow_off = preset({
     name: "Follow the desk: off",
@@ -142,23 +156,21 @@ export default function UpdatePresets(self) {
 
   // --- Status ---------------------------------------------------------------
   presets.status = preset({
-    name: "Link to SuperRack",
+    name: "Link to SuperRack (green while reachable)",
     text: `$(${L}:link)`,
     size: "7",
-    bgcolor: direct ? RED : GREY,
-    feedbacks: direct
-      ? [
-          {
-            feedbackId: "connected",
-            options: {},
-            style: { bgcolor: DARKGREEN, color: WHITE },
-          },
-        ]
-      : [],
+    bgcolor: RED,
+    feedbacks: [
+      {
+        feedbackId: "connected",
+        options: {},
+        style: { bgcolor: DARKGREEN, color: WHITE },
+      },
+    ],
   });
   presets.current_rack = preset({
-    name: "The rack SuperRack is on, as far as this module knows",
-    text: `$(${L}:rack_number)\n$(${L}:rack_name)`,
+    name: "The rack SuperRack is on, as far as this module knows, and how",
+    text: `$(${L}:rack_number)\n$(${L}:rack_name)\n$(${L}:rack_how)`,
     size: "auto",
   });
   presets.last_error = preset({
@@ -201,10 +213,10 @@ export default function UpdatePresets(self) {
       name: "Racks",
       description:
         listed.length > 0
-          ? "One per rack SuperRack has listed, labelled with its name; green while SuperRack is on it."
+          ? "One per rack, labelled with its name: green while SuperRack is confirmed on it, amber when it got there only by count."
           : direct
             ? "Racks 1–8 by number until SuperRack connects and lists its racks."
-            : "Racks 1–8 by number: Remora's OSC lists no racks, so edit the number (or type a rack's name).",
+            : "Racks 1–8 by number until Remora's state lists the racks (set Remora's state target to this machine). Edit the number, or type a rack's name.",
       definitions: [
         {
           id: "racks-main",
@@ -241,7 +253,9 @@ export default function UpdatePresets(self) {
         id: "status-main",
         type: "simple",
         name: "Status",
-        presets: direct ? ["status", "current_rack", "last_error"] : ["status"],
+        presets: direct
+          ? ["status", "current_rack", "last_error"]
+          : ["status", "current_rack"],
       },
     ],
   });
