@@ -74,8 +74,8 @@ port. Remora on its MIDI route doesn't use the port, and the two can run side by
    this one) and the port.
 3. For feedback, in Remora, **Settings › Companion › Remora's state**: turn it on, with the address
    of the machine running Companion (127.0.0.1 if it's the same one) and the module's _Port for
-   Remora's state_ (UDP **9021**). It's off until you do this. The state feed needs a Remora
-   release after 0.5.0.
+   Remora's state_ (UDP **9021**). It's off until you do this. The state feed needs
+   [Remora 0.6.0](https://github.com/stoatworks-labs/remora/releases/tag/v0.6.0) or later.
 
 The module asks Remora for its state when it starts and every 5 seconds after, so the connection
 goes green only while Remora is answering. If nothing comes back for 12 seconds, the status says
@@ -139,7 +139,7 @@ path** at a folder containing this repo, run `npm install` in it, and restart Co
   followed.
 - Through Remora, the module's OSC went to Remora 0.4.1 running headless, which turned every
   message into the expected MIDI. The state feed was run end to end against Remora built from its
-  main branch (headless, scratch settings), with the pretend SuperRack on Remora's ProLink port: the
+  main branch, the code released as 0.6.0 (headless, scratch settings), with the pretend SuperRack on Remora's ProLink port: the
   racks reached the module through Remora, a rack shown by name came back `reported`, a rack with
   no input came back `counted`, Follow and Remora's "not connected" problem came through. The
   same chain through Companion 5.1.2, with buttons pressed over the HTTP API: the Vox rack button

@@ -32,7 +32,7 @@ and that port in this connection.
 
 **For feedback**, Remora, **Settings › Companion › Remora's state**: on, with this Companion
 machine's address (127.0.0.1 if it's the same one) and _Port for Remora's state_ (**9021**). It's
-off until you set it, and needs a Remora release after 0.5.0.
+off until you set it, and needs Remora 0.6.0 or later.
 
 The module asks for Remora's state every 5 s. Nothing back for 12 s: the status warns, and the rack
 and Follow feedback go dark. Commands still go. Port 0 = no state feed, no feedback.

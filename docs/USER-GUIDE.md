@@ -140,7 +140,7 @@ a number, a name as a name. Remora matches it with the same rule as above.
 Remora answers nothing to a command, but it can send what it knows to the module. In Remora,
 **Settings › Companion › Remora's state**: turn it on, with the address of the machine running
 Companion (127.0.0.1 if it's the same one) and the module's _Port for Remora's state_ (UDP
-**9021**). It's off until you set it, and it needs a Remora release after 0.5.0.
+**9021**). It's off until you set it, and it needs Remora 0.6.0 or later.
 
 With it on, you get:
 
