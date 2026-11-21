@@ -76,8 +76,10 @@ and Through Remora breaks silently.
 
 ## 6. Traps already paid for
 
-- **NotifySingleRackConfigChanged carries one bare rack record**, not an array. Remora's own code
-  ignored it; the kit's independent client sends it on a rename.
+- **Handle only the messages LAWO's scripts handle.** A message known only from a reading of
+  SuperRack's own files doesn't belong here, even when a test client sends it. One was added on
+  that basis and taken out again on 2026-11-21. Renames arrive in the full-list push the scripts
+  read.
 - **The IAmAlive clock only moves when an IAmAlive goes out**, not on every write, matching Remora,
   which ran against SuperRack.
 - **The port clashes with Remora's.** Remora with its Plug-in Host on SuperRack (ProLink) listens

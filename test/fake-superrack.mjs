@@ -215,12 +215,6 @@ export class FakeSuperRack {
     this.sendOSC("NotifyRacksConfigChanged", this.#rackItems(racks));
   }
 
-  /** What SuperRack pushes when one rack changes: its record, bare. */
-  notifyRack(rack) {
-    this.racks = this.racks.map((r) => (r.index === rack.index ? rack : r));
-    this.sendOSC("NotifySingleRackConfigChanged", rackRecord(rack));
-  }
-
   notify() {
     for (const w of this.waiters.splice(0)) w();
   }

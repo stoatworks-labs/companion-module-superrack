@@ -549,19 +549,6 @@ await check(
     assert.equal(ctx.values.rack_count, 8);
   },
 );
-await check(
-  "one rack changed (its bare record): merged, the rest kept",
-  async () => {
-    sr.notifyRack({ ...RACKS[1], name: "Snare top" });
-    await until(
-      () => ctx.values.rack_2_name === "Snare top",
-      2000,
-      "the rename",
-    );
-    assert.equal(ctx.values.rack_8_name, "Bass");
-    assert.equal(ctx.values.rack_count, 8);
-  },
-);
 
 console.log("\n== Direct: keepalive and refusals ==");
 await check("the module sends IAmAlive about once a second", async () => {

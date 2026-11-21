@@ -15,7 +15,7 @@
 import net from "node:net";
 import { EventEmitter } from "node:events";
 import * as wire from "./prolink-wire.js";
-import { rackFromRecord, racksFromArgs } from "./racks.js";
+import { racksFromArgs } from "./racks.js";
 
 /**
  * Everything this module may send SuperRack: the rack list, and showing and
@@ -361,15 +361,6 @@ export class ProLinkConsole extends EventEmitter {
       case "NotifyRacksConfigChanged":
         this.#setRacks(racksFromArgs(m.args));
         break;
-      case "NotifySingleRackConfigChanged": {
-        // One rack's record, bare (SuperRack's ServiceRx, as written up in
-        // LAWO's mc² scripts): a rename or a new input. Tolerate it wrapped in
-        // an array too.
-        const bare = rackFromRecord(m.args);
-        const one = bare ? [bare] : racksFromArgs(m.args);
-        if (one.length > 0) this.#setRacks(this.#merged(one));
-        break;
-      }
       case "GiveNumRacks": {
         this.#answered(id);
         const n = m.args[1]?.type === "i" ? m.args[1].value : null;
