@@ -1,0 +1,37 @@
+{
+  "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+  "type": "connection",
+  "id": "superrack",
+  "name": "superrack",
+  "shortname": "SuperRack",
+  "description": "Show and step Waves SuperRack's racks and plug-ins, and switch between its Rack page and overview. Directly over ProLink, as a LAWO mc² console does, with SuperRack's rack names in the dropdowns and feedback on the rack shown; or through Remora, which drives SuperRack over MIDI or ProLink and keeps it following the desk. Not affiliated with Waves.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": "git+https://github.com/stoatworks-labs/companion-module-superrack.git",
+  "bugs": "https://github.com/stoatworks-labs/companion-module-superrack/issues",
+  "maintainers": [
+    {
+      "name": "Allan Sargeant",
+      "email": ""
+    }
+  ],
+  "runtime": {
+    "type": "node22",
+    "api": "nodejs-ipc",
+    "apiVersion": "0.0.0",
+    "entrypoint": "../src/main.js"
+  },
+  "legacyIds": [],
+  "manufacturer": "Waves",
+  "products": ["SuperRack Performer", "SuperRack SoundGrid"],
+  "keywords": [
+    "superrack",
+    "waves",
+    "prolink",
+    "plug-ins",
+    "rack",
+    "remora",
+    "audio",
+    "live sound"
+  ]
+}

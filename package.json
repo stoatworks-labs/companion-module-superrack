@@ -1,0 +1,26 @@
+{
+  "name": "companion-module-superrack",
+  "version": "0.1.0",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "format": "prettier -w .",
+    "test": "node test/smoke.mjs",
+    "package": "companion-module-build"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stoatworks-labs/companion-module-superrack.git"
+  },
+  "engines": {
+    "node": "^22.20"
+  },
+  "dependencies": {
+    "@companion-module/base": "~2.2.2"
+  },
+  "devDependencies": {
+    "@companion-module/tools": "^3.2.0",
+    "prettier": "^3.10.1"
+  }
+}
